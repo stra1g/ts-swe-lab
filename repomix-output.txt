@@ -1,0 +1,1364 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+4. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: **/*.md, coverage/, node_modules/
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+Additional Info:
+----------------
+
+================================================================
+Directory Structure
+================================================================
+src/
+  domain/
+    common/
+      result.spec.ts
+      result.ts
+      value-object.spec.ts
+      value-object.ts
+    user/
+      value-objects/
+        email.spec.ts
+        email.ts
+        name.spec.ts
+        name.ts
+        password.spec.ts
+        password.ts
+        username.spec.ts
+        username.ts
+      user.spec.ts
+      user.ts
+  main.spec.ts
+  main.ts
+.eslintignore
+.gitignore
+.node-version
+.prettierrc.json
+eslint.config.mjs
+jest.config.js
+LICENSE
+package.json
+tsconfig.json
+
+================================================================
+Files
+================================================================
+
+================
+File: src/domain/common/result.spec.ts
+================
+import { Result } from './result';
+
+describe('Result', () => {
+  describe('Success results', () => {
+    it('should create a success result', () => {
+      const result = Result.ok<string>('success value');
+
+      expect(result.isSuccess).toBe(true);
+      expect(result.isFailure).toBe(false);
+      expect(result.getValue()).toBe('success value');
+    });
+
+    it('should create a success result with undefined value', () => {
+      const result = Result.ok<string>();
+
+      expect(result.isSuccess).toBe(true);
+      expect(result.isFailure).toBe(false);
+      expect(() => result.getValue()).toThrow();
+    });
+
+    it('should throw when creating a success result with an error', () => {
+      expect(() => {
+        // @ts-ignore: Testing invalid arguments
+        new Result(true, 'some error', 'some value');
+      }).toThrow('InvalidOperation: A result cannot be successful and contain an error');
+    });
+  });
+
+  describe('Failure results', () => {
+    it('should create a failure result', () => {
+      const result = Result.fail<string>('error message');
+
+      expect(result.isSuccess).toBe(false);
+      expect(result.isFailure).toBe(true);
+      expect(result.getErrorValue()).toBe('error message');
+      expect(() => result.getValue()).toThrow();
+    });
+
+    it('should throw when creating a failure result without an error message', () => {
+      expect(() => {
+        // @ts-ignore: Testing invalid arguments
+        new Result(false, undefined, 'some value');
+      }).toThrow('InvalidOperation: A failing result needs to contain an error message');
+    });
+  });
+
+  describe('combine', () => {
+    it('should return first failure when combining results with failures', () => {
+      const results = [Result.ok('success 1'), Result.fail('error 1'), Result.fail('error 2')];
+
+      const combined = Result.combine(results);
+
+      expect(combined.isFailure).toBe(true);
+      expect(combined.getErrorValue()).toBe('error 1');
+    });
+
+    it('should return success when all results are successful', () => {
+      const results = [Result.ok('success 1'), Result.ok('success 2'), Result.ok('success 3')];
+
+      const combined = Result.combine(results);
+
+      expect(combined.isSuccess).toBe(true);
+    });
+
+    it('should handle empty array', () => {
+      const combined = Result.combine([]);
+
+      expect(combined.isSuccess).toBe(true);
+    });
+  });
+
+  describe('getValue', () => {
+    it('should throw with the error message when trying to get value from a failure result', () => {
+      const result = Result.fail<string>('custom error');
+
+      expect(() => result.getValue()).toThrow(/custom error/);
+    });
+  });
+
+  describe('getErrorValue', () => {
+    it('should return "Unknown error" when error is undefined', () => {
+      const result = Result.ok<string>('value');
+
+      expect(result.getErrorValue()).toBe('Unknown error');
+    });
+  });
+});
+
+================
+File: src/domain/common/result.ts
+================
+export class Result<T> {
+  public isSuccess: boolean;
+  public isFailure: boolean;
+  private readonly error: string | undefined;
+  private readonly _value: T | undefined;
+
+  private constructor(isSuccess: boolean, error?: string, value?: T) {
+    if (isSuccess && error) {
+      throw new Error('InvalidOperation: A result cannot be successful and contain an error');
+    }
+
+    if (!isSuccess && !error) {
+      throw new Error('InvalidOperation: A failing result needs to contain an error message');
+    }
+
+    this.isSuccess = isSuccess;
+    this.isFailure = !isSuccess;
+    this.error = error;
+    this._value = value;
+
+    Object.freeze(this);
+  }
+
+  public getValue(): T {
+    if (!this.isSuccess || this._value === undefined) {
+      throw new Error(`Can't get the value of an error result. Error: ${this.error}`);
+    }
+
+    return this._value;
+  }
+
+  public getErrorValue(): string {
+    return this.error || 'Unknown error';
+  }
+
+  public static ok<U>(value?: U): Result<U> {
+    return new Result<U>(true, undefined, value);
+  }
+
+  public static fail<U>(error: string): Result<U> {
+    return new Result<U>(false, error);
+  }
+
+  public static combine(results: Result<any>[]): Result<any> {
+    for (const result of results) {
+      if (result.isFailure) return result;
+    }
+    return Result.ok();
+  }
+}
+
+================
+File: src/domain/common/value-object.spec.ts
+================
+import { ValueObject } from './value-object';
+
+// Test implementation of the abstract class
+class TestValueObject extends ValueObject<{ key: string }> {
+  constructor(props: { key: string }) {
+    super(props);
+  }
+
+  get key(): string {
+    return this.props.key;
+  }
+}
+
+describe('ValueObject', () => {
+  it('should create a value object with frozen props', () => {
+    const props = { key: 'test-value' };
+    const valueObject = new TestValueObject(props);
+
+    expect(valueObject.key).toBe('test-value');
+    expect(Object.isFrozen(valueObject['props'])).toBe(true);
+  });
+
+  it('should determine equality correctly', () => {
+    const vo1 = new TestValueObject({ key: 'same-value' });
+    const vo2 = new TestValueObject({ key: 'same-value' });
+    const vo3 = new TestValueObject({ key: 'different-value' });
+
+    expect(vo1.equals(vo2)).toBe(true);
+    expect(vo1.equals(vo3)).toBe(false);
+  });
+
+  describe('equals method edge cases', () => {
+    let vo: TestValueObject;
+
+    beforeEach(() => {
+      vo = new TestValueObject({ key: 'test-value' });
+    });
+
+    // Test case 1: null and undefined comparisons
+    it('should return false when comparing with null or undefined', () => {
+      expect(vo.equals(null as any)).toBe(false);
+      expect(vo.equals(undefined)).toBe(false);
+    });
+
+    // Test case 2: objects without props
+    it('should return false when comparing with non-value objects', () => {
+      const fakeVo = { equals: () => true } as any;
+      expect(vo.equals(fakeVo)).toBe(false);
+    });
+
+    // Test case 3: explicit undefined props
+    it('should return false when comparing with an object with undefined props', () => {
+      const withUndefinedProps = { props: undefined } as any;
+      expect(vo.equals(withUndefinedProps)).toBe(false);
+    });
+  });
+});
+
+================
+File: src/domain/common/value-object.ts
+================
+export abstract class ValueObject<T> {
+  protected readonly props: T;
+
+  protected constructor(props: T) {
+    this.props = Object.freeze(props);
+  }
+
+  public equals(vo?: ValueObject<T>): boolean {
+    if (vo === null || vo === undefined) return false;
+
+    if (vo.props === undefined) return false;
+
+    return JSON.stringify(this.props) === JSON.stringify(vo.props);
+  }
+}
+
+================
+File: src/domain/user/value-objects/email.spec.ts
+================
+import { Email } from './email';
+
+describe('Email', () => {
+  it('should create a valid email successfully', () => {
+    const emailOrError = Email.create('test@example.com');
+
+    expect(emailOrError.isSuccess).toBe(true);
+    expect(emailOrError.getValue().value).toBe('test@example.com');
+  });
+
+  it('should convert email to lowercase', () => {
+    const emailOrError = Email.create('TEST@EXAMPLE.COM');
+
+    expect(emailOrError.isSuccess).toBe(true);
+    expect(emailOrError.getValue().value).toBe('test@example.com');
+  });
+
+  it('should fail when email is empty', () => {
+    const emailOrError = Email.create('');
+
+    expect(emailOrError.isFailure).toBe(true);
+    expect(emailOrError.getErrorValue()).toBe('Email cannot be empty');
+  });
+
+  it('should fail when email is only whitespace', () => {
+    const emailOrError = Email.create('   ');
+
+    expect(emailOrError.isFailure).toBe(true);
+    expect(emailOrError.getErrorValue()).toBe('Email cannot be empty');
+  });
+
+  it('should fail when email has invalid format - missing @', () => {
+    const emailOrError = Email.create('testexample.com');
+
+    expect(emailOrError.isFailure).toBe(true);
+    expect(emailOrError.getErrorValue()).toBe('Email format is invalid');
+  });
+
+  it('should fail when email has invalid format - missing domain', () => {
+    const emailOrError = Email.create('test@');
+
+    expect(emailOrError.isFailure).toBe(true);
+    expect(emailOrError.getErrorValue()).toBe('Email format is invalid');
+  });
+
+  it('should fail when email has invalid format - missing TLD', () => {
+    const emailOrError = Email.create('test@example');
+
+    expect(emailOrError.isFailure).toBe(true);
+    expect(emailOrError.getErrorValue()).toBe('Email format is invalid');
+  });
+
+  it('should correctly compare two equal email value objects', () => {
+    const email1 = Email.create('test@example.com').getValue();
+    const email2 = Email.create('test@example.com').getValue();
+
+    expect(email1.equals(email2)).toBe(true);
+  });
+
+  it('should correctly compare two different email value objects', () => {
+    const email1 = Email.create('test1@example.com').getValue();
+    const email2 = Email.create('test2@example.com').getValue();
+
+    expect(email1.equals(email2)).toBe(false);
+  });
+});
+
+================
+File: src/domain/user/value-objects/email.ts
+================
+import { ValueObject } from '../../common/value-object';
+import { Result } from '../../common/result';
+
+interface EmailProps {
+  value: string;
+}
+
+export class Email extends ValueObject<EmailProps> {
+  private constructor(props: EmailProps) {
+    super(props);
+  }
+
+  get value(): string {
+    return this.props.value;
+  }
+
+  private static isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  public static create(email: string): Result<Email> {
+    if (!email || email.trim().length === 0) {
+      return Result.fail<Email>('Email cannot be empty');
+    }
+
+    if (!this.isValidEmail(email)) {
+      return Result.fail<Email>('Email format is invalid');
+    }
+
+    return Result.ok<Email>(new Email({ value: email.toLowerCase() }));
+  }
+}
+
+================
+File: src/domain/user/value-objects/name.spec.ts
+================
+import { Name } from './name';
+
+describe('Name', () => {
+  it('should create a valid name successfully', () => {
+    const nameOrError = Name.create('John Doe');
+
+    expect(nameOrError.isSuccess).toBe(true);
+    expect(nameOrError.getValue().value).toBe('John Doe');
+  });
+
+  it('should trim whitespace from name', () => {
+    const nameOrError = Name.create('  John Doe  ');
+
+    expect(nameOrError.isSuccess).toBe(true);
+    expect(nameOrError.getValue().value).toBe('John Doe');
+  });
+
+  it('should fail when name is empty', () => {
+    const nameOrError = Name.create('');
+
+    expect(nameOrError.isFailure).toBe(true);
+    expect(nameOrError.getErrorValue()).toBe('Name cannot be empty');
+  });
+
+  it('should fail when name is only whitespace', () => {
+    const nameOrError = Name.create('   ');
+
+    expect(nameOrError.isFailure).toBe(true);
+    expect(nameOrError.getErrorValue()).toBe('Name cannot be empty');
+  });
+
+  it('should fail when name is too short', () => {
+    const nameOrError = Name.create('J');
+
+    expect(nameOrError.isFailure).toBe(true);
+    expect(nameOrError.getErrorValue()).toBe('Name must be between 2 and 100 characters');
+  });
+
+  it('should fail when name is too long', () => {
+    const longName = 'A'.repeat(101);
+    const nameOrError = Name.create(longName);
+
+    expect(nameOrError.isFailure).toBe(true);
+    expect(nameOrError.getErrorValue()).toBe('Name must be between 2 and 100 characters');
+  });
+
+  it('should correctly compare two equal name value objects', () => {
+    const name1 = Name.create('John Doe').getValue();
+    const name2 = Name.create('John Doe').getValue();
+
+    expect(name1.equals(name2)).toBe(true);
+  });
+
+  it('should correctly compare two different name value objects', () => {
+    const name1 = Name.create('John Doe').getValue();
+    const name2 = Name.create('Jane Doe').getValue();
+
+    expect(name1.equals(name2)).toBe(false);
+  });
+});
+
+================
+File: src/domain/user/value-objects/name.ts
+================
+import { ValueObject } from '../../common/value-object';
+import { Result } from '../../common/result';
+
+interface NameProps {
+  value: string;
+}
+
+export class Name extends ValueObject<NameProps> {
+  private constructor(props: NameProps) {
+    super(props);
+  }
+
+  get value(): string {
+    return this.props.value;
+  }
+
+  private static isValidName(name: string): boolean {
+    return name.length >= 2 && name.length <= 100;
+  }
+
+  public static create(name: string): Result<Name> {
+    if (!name || name.trim().length === 0) {
+      return Result.fail<Name>('Name cannot be empty');
+    }
+
+    const trimmedName = name.trim();
+
+    if (!this.isValidName(trimmedName)) {
+      return Result.fail<Name>('Name must be between 2 and 100 characters');
+    }
+
+    return Result.ok<Name>(new Name({ value: trimmedName }));
+  }
+}
+
+================
+File: src/domain/user/value-objects/password.spec.ts
+================
+import { Password } from './password';
+
+describe('Password', () => {
+  it('should create a valid password successfully', () => {
+    const passwordOrError = Password.create('StrongP4ssword');
+
+    expect(passwordOrError.isSuccess).toBe(true);
+    expect(passwordOrError.getValue().value).toBe('StrongP4ssword');
+    expect(passwordOrError.getValue().isHashed).toBe(false);
+  });
+
+  it('should create a valid hashed password', () => {
+    const hashedPassword = '$2b$10$abcdefghijklmnopqrstuvwxyz012345';
+    const passwordOrError = Password.create(hashedPassword, true);
+
+    expect(passwordOrError.isSuccess).toBe(true);
+    expect(passwordOrError.getValue().value).toBe(hashedPassword);
+    expect(passwordOrError.getValue().isHashed).toBe(true);
+  });
+
+  it('should fail when password is empty', () => {
+    const passwordOrError = Password.create('');
+
+    expect(passwordOrError.isFailure).toBe(true);
+    expect(passwordOrError.getErrorValue()).toBe('Password cannot be empty');
+  });
+
+  it('should fail when password is too short', () => {
+    const passwordOrError = Password.create('Short1');
+
+    expect(passwordOrError.isFailure).toBe(true);
+    expect(passwordOrError.getErrorValue()).toContain('Password must be at least 8 characters');
+  });
+
+  it('should fail when password has no uppercase letters', () => {
+    const passwordOrError = Password.create('password123');
+
+    expect(passwordOrError.isFailure).toBe(true);
+    expect(passwordOrError.getErrorValue()).toContain('Password must be at least 8 characters');
+  });
+
+  it('should fail when password has no lowercase letters', () => {
+    const passwordOrError = Password.create('PASSWORD123');
+
+    expect(passwordOrError.isFailure).toBe(true);
+    expect(passwordOrError.getErrorValue()).toContain('Password must be at least 8 characters');
+  });
+
+  it('should fail when password has no numbers', () => {
+    const passwordOrError = Password.create('PasswordNoNumbers');
+
+    expect(passwordOrError.isFailure).toBe(true);
+    expect(passwordOrError.getErrorValue()).toContain('Password must be at least 8 characters');
+  });
+
+  it('should hash a password correctly', async () => {
+    const passwordOrError = Password.create('StrongP4ssword');
+    const password = passwordOrError.getValue();
+
+    const hashedPassword = await Password.hashPassword(password);
+
+    expect(hashedPassword.isHashed).toBe(true);
+    expect(hashedPassword.value).not.toBe('StrongP4ssword');
+  });
+
+  it('should correctly compare a password with its hash', async () => {
+    const passwordOrError = Password.create('StrongP4ssword');
+    const password = passwordOrError.getValue();
+
+    const hashedPassword = await Password.hashPassword(password);
+
+    expect(await hashedPassword.comparePassword('StrongP4ssword')).toBe(true);
+    expect(await hashedPassword.comparePassword('WrongPassword')).toBe(false);
+  });
+
+  it('should correctly compare two equal password value objects', () => {
+    const password1 = Password.create('StrongP4ssword').getValue();
+    const password2 = Password.create('StrongP4ssword').getValue();
+
+    expect(password1.equals(password2)).toBe(true);
+  });
+
+  it('should correctly compare two different password value objects', () => {
+    const password1 = Password.create('StrongP4ssword').getValue();
+    const password2 = Password.create('DifferentP4ssword').getValue();
+
+    expect(password1.equals(password2)).toBe(false);
+  });
+
+  it('should compare plaintext passwords correctly when not hashed', async () => {
+    const passwordOrError = Password.create('StrongP4ssword');
+    const password = passwordOrError.getValue();
+
+    expect(await password.comparePassword('StrongP4ssword')).toBe(true);
+
+    expect(await password.comparePassword('DifferentP4ssword')).toBe(false);
+  });
+
+  it('should not re-hash an already hashed password', async () => {
+    const hashedValue = '$2b$10$abcdefghijklmnopqrstuvwxyz012345';
+    const passwordOrError = Password.create(hashedValue, true);
+    const password = passwordOrError.getValue();
+
+    const rehashed = await Password.hashPassword(password);
+
+    expect(rehashed.value).toBe(hashedValue);
+    expect(rehashed.isHashed).toBe(true);
+  });
+});
+
+================
+File: src/domain/user/value-objects/password.ts
+================
+import { ValueObject } from '../../common/value-object';
+import { Result } from '../../common/result';
+import * as bcrypt from 'bcrypt';
+
+interface PasswordProps {
+  value: string;
+  hashed?: boolean;
+}
+
+export class Password extends ValueObject<PasswordProps> {
+  private constructor(props: PasswordProps) {
+    super(props);
+  }
+
+  get value(): string {
+    return this.props.value;
+  }
+
+  get isHashed(): boolean {
+    return this.props.hashed || false;
+  }
+
+  private static isValidPassword(password: string): boolean {
+    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+    const passwordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]{8,}$/;
+    return passwordRegex.test(password);
+  }
+
+  public async comparePassword(plainTextPassword: string): Promise<boolean> {
+    if (this.isHashed) return await bcrypt.compare(plainTextPassword, this.props.value);
+
+    return this.props.value === plainTextPassword;
+  }
+
+  public static async hashPassword(password: Password): Promise<Password> {
+    if (password.isHashed) return password;
+
+    const hashedPassword = await bcrypt.hash(password.props.value, 10);
+    return new Password({ value: hashedPassword, hashed: true });
+  }
+
+  public static create(password: string, hashed: boolean = false): Result<Password> {
+    if (!password || password.length === 0)
+      return Result.fail<Password>('Password cannot be empty');
+
+    if (!hashed && !this.isValidPassword(password))
+      return Result.fail<Password>(
+        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number'
+      );
+
+    return Result.ok<Password>(new Password({ value: password, hashed }));
+  }
+}
+
+================
+File: src/domain/user/value-objects/username.spec.ts
+================
+import { Username } from './username';
+
+describe('Username', () => {
+  it('should create a valid username successfully', () => {
+    const usernameOrError = Username.create('validuser');
+
+    expect(usernameOrError.isSuccess).toBe(true);
+    expect(usernameOrError.getValue().value).toBe('validuser');
+  });
+
+  it('should accept usernames with allowed special characters', () => {
+    const usernameOrError = Username.create('valid_user-123');
+
+    expect(usernameOrError.isSuccess).toBe(true);
+    expect(usernameOrError.getValue().value).toBe('valid_user-123');
+  });
+
+  it('should accept usernames with minimum length (3 characters)', () => {
+    const usernameOrError = Username.create('abc');
+
+    expect(usernameOrError.isSuccess).toBe(true);
+  });
+
+  it('should accept usernames with maximum length (30 characters)', () => {
+    const username = 'abcdefghijklmnopqrstuvwxyz1234';
+    expect(username.length).toBe(30);
+
+    const usernameOrError = Username.create(username);
+
+    expect(usernameOrError.isSuccess).toBe(true);
+  });
+
+  it('should fail when username is empty', () => {
+    const usernameOrError = Username.create('');
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toBe('Username cannot be empty');
+  });
+
+  it('should fail when username is only whitespace', () => {
+    const usernameOrError = Username.create('   ');
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toBe('Username cannot be empty');
+  });
+
+  it('should fail when username is too short (less than 3 characters)', () => {
+    const usernameOrError = Username.create('ab');
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toContain('Username must be 3-30 characters');
+  });
+
+  it('should fail when username is too long (more than 30 characters)', () => {
+    const username = 'abcdefghijklmnopqrstuvwxyz12345'; // 31 characters
+    expect(username.length).toBe(31);
+
+    const usernameOrError = Username.create(username);
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toContain('Username must be 3-30 characters');
+  });
+
+  it('should fail when username contains invalid characters', () => {
+    const usernameOrError = Username.create('invalid@user');
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toContain('Username must be 3-30 characters');
+  });
+
+  it('should fail when username contains spaces', () => {
+    const usernameOrError = Username.create('invalid user');
+
+    expect(usernameOrError.isFailure).toBe(true);
+    expect(usernameOrError.getErrorValue()).toContain('Username must be 3-30 characters');
+  });
+
+  it('should correctly compare two equal username value objects', () => {
+    const username1 = Username.create('testuser').getValue();
+    const username2 = Username.create('testuser').getValue();
+
+    expect(username1.equals(username2)).toBe(true);
+  });
+
+  it('should correctly compare two different username value objects', () => {
+    const username1 = Username.create('testuser1').getValue();
+    const username2 = Username.create('testuser2').getValue();
+
+    expect(username1.equals(username2)).toBe(false);
+  });
+});
+
+================
+File: src/domain/user/value-objects/username.ts
+================
+import { ValueObject } from '../../common/value-object';
+import { Result } from '../../common/result';
+
+interface UsernameProps {
+  value: string;
+}
+
+export class Username extends ValueObject<UsernameProps> {
+  private constructor(props: UsernameProps) {
+    super(props);
+  }
+
+  get value(): string {
+    return this.props.value;
+  }
+
+  private static isValidUsername(username: string): boolean {
+    // Username must be 3-30 characters, alphanumeric with underscores and hyphens
+    const usernameRegex = /^[a-zA-Z0-9_-]{3,30}$/;
+    return usernameRegex.test(username);
+  }
+
+  public static create(username: string): Result<Username> {
+    if (!username || username.trim().length === 0) {
+      return Result.fail<Username>('Username cannot be empty');
+    }
+
+    if (!this.isValidUsername(username))
+      return Result.fail<Username>(
+        'Username must be 3-30 characters and can only contain letters, numbers, underscores, and hyphens'
+      );
+
+    return Result.ok<Username>(new Username({ value: username }));
+  }
+}
+
+================
+File: src/domain/user/user.spec.ts
+================
+import { User } from './user';
+import { Email } from './value-objects/email';
+import { Username } from './value-objects/username';
+import { Password } from './value-objects/password';
+import { Name } from './value-objects/name';
+
+describe('User', () => {
+  const validEmail = Email.create('test@example.com').getValue();
+  const validUsername = Username.create('testuser').getValue();
+  const validPassword = Password.create('StrongP4ssword').getValue();
+  const validName = Name.create('John Doe').getValue();
+
+  it('should create a valid user successfully', () => {
+    const userOrError = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    });
+
+    expect(userOrError.isSuccess).toBe(true);
+
+    const user = userOrError.getValue();
+    expect(user.id).toBeDefined();
+    expect(user.email).toBe(validEmail);
+    expect(user.username).toBe(validUsername);
+    expect(user.password).toBe(validPassword);
+    expect(user.name).toBe(validName);
+    expect(user.version).toBe(0);
+  });
+
+  it('should create user with provided id', () => {
+    const customId = 'custom-id-123';
+    const userOrError = User.create({
+      id: customId,
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    });
+
+    expect(userOrError.isSuccess).toBe(true);
+    expect(userOrError.getValue().id).toBe(customId);
+  });
+
+  it('should change email successfully', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const newEmail = Email.create('new@example.com').getValue();
+    const result = user.changeEmail(newEmail);
+
+    expect(result.isSuccess).toBe(true);
+    expect(user.email).toBe(newEmail);
+    expect(user.version).toBe(1);
+  });
+
+  it('should change username successfully', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const newUsername = Username.create('newusername').getValue();
+    const result = user.changeUsername(newUsername);
+
+    expect(result.isSuccess).toBe(true);
+    expect(user.username).toBe(newUsername);
+    expect(user.version).toBe(1);
+  });
+
+  it('should change name successfully', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const newName = Name.create('Jane Doe').getValue();
+    const result = user.changeName(newName);
+
+    expect(result.isSuccess).toBe(true);
+    expect(user.name).toBe(newName);
+    expect(user.version).toBe(1);
+  });
+
+  it('should change password successfully', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const newPassword = Password.create('NewStrongP4ss').getValue();
+    const result = user.changePassword(newPassword);
+
+    expect(result.isSuccess).toBe(true);
+    expect(user.password).toBe(newPassword);
+    expect(user.version).toBe(1);
+  });
+
+  it('should increment version on each update', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    user.changeEmail(Email.create('new@example.com').getValue());
+    expect(user.version).toBe(1);
+
+    user.changeUsername(Username.create('newusername').getValue());
+    expect(user.version).toBe(2);
+
+    user.changeName(Name.create('Jane Doe').getValue());
+    expect(user.version).toBe(3);
+
+    user.changePassword(Password.create('NewStrongP4ss').getValue());
+    expect(user.version).toBe(4);
+  });
+
+  it('should call updated() when changing email', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const updatedSpy = jest.spyOn(user as any, 'updated');
+
+    user.changeEmail(Email.create('different@example.com').getValue());
+
+    expect(updatedSpy).toHaveBeenCalled();
+  });
+
+  it('should call updated() when changing username', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const updatedSpy = jest.spyOn(user as any, 'updated');
+
+    user.changeUsername(Username.create('differentuser').getValue());
+
+    expect(updatedSpy).toHaveBeenCalled();
+  });
+
+  it('should call updated() when changing name', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const updatedSpy = jest.spyOn(user as any, 'updated');
+
+    user.changeName(Name.create('Different Name').getValue());
+
+    expect(updatedSpy).toHaveBeenCalled();
+  });
+
+  it('should call updated() when changing password', () => {
+    const user = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+    }).getValue();
+
+    const updatedSpy = jest.spyOn(user as any, 'updated');
+
+    user.changePassword(Password.create('D1fferentP@ssword', false).getValue());
+
+    expect(updatedSpy).toHaveBeenCalled();
+  });
+
+  it('should create user with custom timestamps', () => {
+    const customCreatedAt = new Date(2022, 1, 1);
+    const customUpdatedAt = new Date(2022, 1, 2);
+
+    const userOrError = User.create({
+      email: validEmail,
+      username: validUsername,
+      password: validPassword,
+      name: validName,
+      createdAt: customCreatedAt,
+      updatedAt: customUpdatedAt,
+    });
+
+    const user = userOrError.getValue();
+    expect(user.createdAt).toEqual(customCreatedAt);
+    expect(user.updatedAt).toEqual(customUpdatedAt);
+  });
+});
+
+================
+File: src/domain/user/user.ts
+================
+import { Email } from './value-objects/email';
+import { Username } from './value-objects/username';
+import { Password } from './value-objects/password';
+import { Name } from './value-objects/name';
+import { Result } from '../common/result';
+import { randomUUID } from 'node:crypto';
+
+interface UserProps {
+  id?: string;
+  email: Email;
+  username: Username;
+  password: Password;
+  name: Name;
+  version?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export class User {
+  private readonly _id: string;
+  private _email: Email;
+  private _username: Username;
+  private _password: Password;
+  private _name: Name;
+  private readonly _createdAt: Date;
+  private _updatedAt: Date;
+  private _version: number;
+
+  private constructor(props: UserProps) {
+    this._id = props.id || randomUUID();
+    this._email = props.email;
+    this._username = props.username;
+    this._password = props.password;
+    this._name = props.name;
+    this._createdAt = props.createdAt || new Date();
+    this._updatedAt = props.updatedAt || new Date();
+    this._version = props.version || 0;
+  }
+
+  get id(): string {
+    return this._id;
+  }
+
+  get email(): Email {
+    return this._email;
+  }
+
+  get username(): Username {
+    return this._username;
+  }
+
+  get password(): Password {
+    return this._password;
+  }
+
+  get name(): Name {
+    return this._name;
+  }
+
+  get version(): number {
+    return this._version;
+  }
+
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
+
+  private updated(): void {
+    this._updatedAt = new Date();
+    this._version++;
+  }
+
+  public changeEmail(email: Email): Result<void> {
+    this._email = email;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changeUsername(username: Username): Result<void> {
+    this._username = username;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changeName(name: Name): Result<void> {
+    this._name = name;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changePassword(password: Password): Result<void> {
+    this._password = password;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public static create(props: UserProps): Result<User> {
+    return Result.ok<User>(new User(props));
+  }
+}
+
+================
+File: src/main.spec.ts
+================
+import { sayHello } from './main';
+
+test('Main Hello', () => {
+  expect(sayHello).toBeDefined();
+});
+
+================
+File: src/main.ts
+================
+export function sayHello() {
+  console.log('Hello!');
+}
+
+sayHello();
+
+================
+File: .eslintignore
+================
+node_modules
+dist
+build
+coverage
+
+================
+File: .node-version
+================
+v23.11.0
+
+================
+File: .prettierrc.json
+================
+{
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "printWidth": 100,
+  "bracketSpacing": true,
+  "arrowParens": "avoid"
+}
+
+================
+File: eslint.config.mjs
+================
+import js from '@eslint/js';
+import prettierPlugin from 'eslint-plugin-prettier';
+import prettierConfig from 'eslint-config-prettier';
+import typescript from 'typescript-eslint';
+
+export default [
+  js.configs.recommended,
+  ...typescript.configs.recommended,
+  prettierConfig,
+  {
+    plugins: {
+      prettier: prettierPlugin,
+    },
+    rules: {
+      'prettier/prettier': 'error',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
+      'no-constant-condition': 'warn',
+      'no-undef': 'off',
+    },
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+    },
+  },
+  {
+    files: ['**/*.js', '**/*.mjs'],
+    rules: {},
+  },
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    ...typescript.configs.recommended,
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+];
+
+================
+File: jest.config.js
+================
+/** @type {import('ts-jest').JestConfigWithTsJest} **/
+module.exports = {
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {}],
+  },
+  coverageProvider: 'v8',
+  testMatch: ['<rootDir>/src/**/*.spec.ts'],
+  collectCoverage: true,
+  collectCoverageFrom: [
+    '<rootDir>/src/**/*.ts',
+    '!<rootDir>/src/**/*.spec.ts',
+    '!<rootDir>/src/**/*.test.ts',
+    '!<rootDir>/src/**/index.ts',
+    '!<rootDir>/src/**/*.d.ts',
+    '!<rootDir>/src/types/**/*.ts',
+  ],
+  coverageDirectory: '<rootDir>/coverage',
+  coverageReporters: ['text', 'lcov', 'clover', 'html'],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+  },
+};
+
+================
+File: LICENSE
+================
+MIT License
+
+Copyright (c) 2025 Luís Vitor
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================
+File: package.json
+================
+{
+  "name": "ts-swe-poc",
+  "version": "0.0.1",
+  "description": "software engineering proof of concepts wrote in typescript",
+  "main": "src/main.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write .",
+    "test": "jest --passWithNoTests",
+    "test:cov": "jest --collect-coverage --passWithNoTests"
+  },
+  "keywords": [
+    "swe",
+    "ts",
+    "nodejs",
+    "ddd"
+  ],
+  "author": "Luís Vitor",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jest": "^29.5.14",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-prettier": "^5.4.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-jest": "^29.3.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.0"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1"
+  }
+}
+
+================
+File: tsconfig.json
+================
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "baseUrl": "./",
+    "outDir": "dist"
+  }
+}
+
+================
+File: .gitignore
+================
+.idea/
+.vscode/
+node_modules/
+coverage/
+
+.env
+
+
+
+================================================================
+End of Codebase
+================================================================

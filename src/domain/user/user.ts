@@ -4,6 +4,8 @@ import { Password } from './value-objects/password';
 import { Name } from './value-objects/name';
 import { Result } from '../common/result';
 import { randomUUID } from 'node:crypto';
+import { AggregateRoot } from '../common/aggregate-root';
+import { UserCreatedEvent } from './events/user-created.event';
 
 interface UserProps {
   id?: string;
@@ -16,7 +18,7 @@ interface UserProps {
   updatedAt?: Date;
 }
 
-export class User {
+export class User extends AggregateRoot {
   private readonly _id: string;
   private _email: Email;
   private _username: Username;
@@ -27,6 +29,7 @@ export class User {
   private _version: number;
 
   private constructor(props: UserProps) {
+    super();
     this._id = props.id || randomUUID();
     this._email = props.email;
     this._username = props.username;
@@ -99,6 +102,10 @@ export class User {
   }
 
   public static create(props: UserProps): Result<User> {
-    return Result.ok<User>(new User(props));
+    const user = new User(props);
+
+    user.addDomainEvent(new UserCreatedEvent(user.id, user.email, user.username, user.name));
+
+    return Result.ok<User>(user);
   }
 }
