@@ -19,15 +19,12 @@ export class Name extends ValueObject<NameProps> {
   }
 
   public static create(name: string): Result<Name> {
-    if (!name || name.trim().length === 0) {
-      return Result.fail<Name>('Name cannot be empty');
-    }
+    if (!name || name.trim().length === 0) return Result.fail<Name>('Name cannot be empty');
 
     const trimmedName = name.trim();
 
-    if (!this.isValidName(trimmedName)) {
+    if (!this.isValidName(trimmedName))
       return Result.fail<Name>('Name must be between 2 and 100 characters');
-    }
 
     return Result.ok<Name>(new Name({ value: trimmedName }));
   }
