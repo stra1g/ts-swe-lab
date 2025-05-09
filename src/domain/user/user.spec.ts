@@ -29,20 +29,6 @@ describe('User', () => {
     expect(user.version).toBe(0);
   });
 
-  it('should create user with provided id', () => {
-    const customId = 'custom-id-123';
-    const userOrError = User.create({
-      id: customId,
-      email: validEmail,
-      username: validUsername,
-      password: validPassword,
-      name: validName,
-    });
-
-    expect(userOrError.isSuccess).toBe(true);
-    expect(userOrError.getValue().id).toBe(customId);
-  });
-
   it('should change email successfully', () => {
     const user = User.create({
       email: validEmail,
@@ -186,23 +172,5 @@ describe('User', () => {
     user.changePassword(Password.create('D1fferentP@ssword', false).getValue());
 
     expect(updatedSpy).toHaveBeenCalled();
-  });
-
-  it('should create user with custom timestamps', () => {
-    const customCreatedAt = new Date(2022, 1, 1);
-    const customUpdatedAt = new Date(2022, 1, 2);
-
-    const userOrError = User.create({
-      email: validEmail,
-      username: validUsername,
-      password: validPassword,
-      name: validName,
-      createdAt: customCreatedAt,
-      updatedAt: customUpdatedAt,
-    });
-
-    const user = userOrError.getValue();
-    expect(user.createdAt).toEqual(customCreatedAt);
-    expect(user.updatedAt).toEqual(customUpdatedAt);
   });
 });

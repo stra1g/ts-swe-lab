@@ -3,41 +3,19 @@ import { Username } from './value-objects/username';
 import { Password } from './value-objects/password';
 import { Name } from './value-objects/name';
 import { Result } from '../common/result';
-import { randomUUID } from 'node:crypto';
 import { AggregateRoot } from '../common/aggregate-root';
 import { UserCreatedEvent } from './events/user-created.event';
 
 interface UserProps {
-  id?: string;
   email: Email;
   username: Username;
   password: Password;
   name: Name;
-  version?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
 }
 
-export class User extends AggregateRoot {
-  private readonly _id: string;
-  private _email: Email;
-  private _username: Username;
-  private _password: Password;
-  private _name: Name;
-  private readonly _createdAt: Date;
-  private _updatedAt: Date;
-  private _version: number;
-
+export class User extends AggregateRoot<UserProps> {
   private constructor(props: UserProps) {
-    super();
-    this._id = props.id || randomUUID();
-    this._email = props.email;
-    this._username = props.username;
-    this._password = props.password;
-    this._name = props.name;
-    this._createdAt = props.createdAt || new Date();
-    this._updatedAt = props.updatedAt || new Date();
-    this._version = props.version || 0;
+    super(props);
   }
 
   get id(): string {
@@ -45,58 +23,41 @@ export class User extends AggregateRoot {
   }
 
   get email(): Email {
-    return this._email;
+    return this.props.email;
   }
 
   get username(): Username {
-    return this._username;
+    return this.props.username;
   }
 
   get password(): Password {
-    return this._password;
+    return this.props.password;
   }
 
   get name(): Name {
-    return this._name;
-  }
-
-  get version(): number {
-    return this._version;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get updatedAt(): Date {
-    return this._updatedAt;
-  }
-
-  private updated(): void {
-    this._updatedAt = new Date();
-    this._version++;
+    return this.props.name;
   }
 
   public changeEmail(email: Email): Result<void> {
-    this._email = email;
+    this.props.email = email;
     this.updated();
     return Result.ok<void>();
   }
 
   public changeUsername(username: Username): Result<void> {
-    this._username = username;
+    this.props.username = username;
     this.updated();
     return Result.ok<void>();
   }
 
   public changeName(name: Name): Result<void> {
-    this._name = name;
+    this.props.name = name;
     this.updated();
     return Result.ok<void>();
   }
 
   public changePassword(password: Password): Result<void> {
-    this._password = password;
+    this.props.password = password;
     this.updated();
     return Result.ok<void>();
   }
@@ -104,7 +65,9 @@ export class User extends AggregateRoot {
   public static create(props: UserProps): Result<User> {
     const user = new User(props);
 
-    user.addDomainEvent(new UserCreatedEvent(user.id, user.email, user.username, user.name));
+    user.addDomainEvent(
+      new UserCreatedEvent(user.id, user.email.value, user.username.value, user.name.value)
+    );
 
     return Result.ok<User>(user);
   }

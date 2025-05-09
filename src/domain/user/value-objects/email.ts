@@ -20,13 +20,9 @@ export class Email extends ValueObject<EmailProps> {
   }
 
   public static create(email: string): Result<Email> {
-    if (!email || email.trim().length === 0) {
-      return Result.fail<Email>('Email cannot be empty');
-    }
+    if (!email || email.trim().length === 0) return Result.fail<Email>('Email cannot be empty');
 
-    if (!this.isValidEmail(email)) {
-      return Result.fail<Email>('Email format is invalid');
-    }
+    if (!this.isValidEmail(email)) return Result.fail<Email>('Email format is invalid');
 
     return Result.ok<Email>(new Email({ value: email.toLowerCase() }));
   }

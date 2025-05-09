@@ -6,6 +6,14 @@ export interface DomainEvent {
   readonly eventName: string;
 }
 
+export interface DomainEventHandler<T extends DomainEvent> {
+  /**
+   * Handle a domain event
+   * @param event The domain event to handle
+   */
+  handle(event: T): Promise<void>;
+}
+
 export abstract class BaseDomainEvent implements DomainEvent {
   public readonly eventId: string;
   public readonly occurredOn: Date;

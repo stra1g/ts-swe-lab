@@ -5,13 +5,11 @@ export class Result<T> {
   private readonly _value: T | undefined;
 
   private constructor(isSuccess: boolean, error?: string, value?: T) {
-    if (isSuccess && error) {
+    if (isSuccess && error)
       throw new Error('InvalidOperation: A result cannot be successful and contain an error');
-    }
 
-    if (!isSuccess && !error) {
+    if (!isSuccess && !error)
       throw new Error('InvalidOperation: A failing result needs to contain an error message');
-    }
 
     this.isSuccess = isSuccess;
     this.isFailure = !isSuccess;
@@ -22,9 +20,8 @@ export class Result<T> {
   }
 
   public getValue(): T {
-    if (!this.isSuccess || this._value === undefined) {
+    if (!this.isSuccess || this._value === undefined)
       throw new Error(`Can't get the value of an error result. Error: ${this.error}`);
-    }
 
     return this._value;
   }

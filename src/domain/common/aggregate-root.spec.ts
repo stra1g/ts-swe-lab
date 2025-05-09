@@ -1,15 +1,17 @@
 import { AggregateRoot } from './aggregate-root';
 import { BaseDomainEvent } from './domain-event';
 
+interface TestProps {}
+
 class TestEvent extends BaseDomainEvent {
   constructor(public readonly data: string) {
     super();
   }
 }
 
-class TestAggregate extends AggregateRoot {
-  constructor(public id: string) {
-    super();
+class TestAggregate extends AggregateRoot<TestProps> {
+  constructor(props: TestProps) {
+    super(props);
   }
 
   public addTestEvent(data: string): void {
@@ -22,12 +24,6 @@ describe('AggregateRoot', () => {
     const aggregate = new TestAggregate('test-id');
 
     expect(aggregate.domainEvents).toEqual([]);
-  });
-
-  it('should expose the aggregate ID', () => {
-    const aggregate = new TestAggregate('test-id');
-
-    expect(aggregate.id).toBe('test-id');
   });
 
   it('should add domain events', () => {

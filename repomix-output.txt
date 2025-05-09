@@ -37,7 +37,7 @@ Notes:
 ------
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: **/*.md, coverage/, node_modules/
+- Files matching these patterns are excluded: **/*.md, node_modules/, coverage/
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -51,11 +51,17 @@ Directory Structure
 src/
   domain/
     common/
+      aggregate-root.spec.ts
+      aggregate-root.ts
+      domain-event.spec.ts
+      domain-event.ts
       result.spec.ts
       result.ts
       value-object.spec.ts
       value-object.ts
     user/
+      events/
+        user-created.event.ts
       value-objects/
         email.spec.ts
         email.ts
@@ -82,6 +88,157 @@ tsconfig.json
 ================================================================
 Files
 ================================================================
+
+================
+File: src/domain/common/aggregate-root.spec.ts
+================
+import { AggregateRoot } from './aggregate-root';
+import { BaseDomainEvent } from './domain-event';
+
+class TestEvent extends BaseDomainEvent {
+  constructor(public readonly data: string) {
+    super();
+  }
+}
+
+class TestAggregate extends AggregateRoot {
+  constructor(public id: string) {
+    super();
+  }
+
+  public addTestEvent(data: string): void {
+    this.addDomainEvent(new TestEvent(data));
+  }
+}
+
+describe('AggregateRoot', () => {
+  it('should initialize with empty domain events', () => {
+    const aggregate = new TestAggregate('test-id');
+
+    expect(aggregate.domainEvents).toEqual([]);
+  });
+
+  it('should expose the aggregate ID', () => {
+    const aggregate = new TestAggregate('test-id');
+
+    expect(aggregate.id).toBe('test-id');
+  });
+
+  it('should add domain events', () => {
+    const aggregate = new TestAggregate('test-id');
+
+    aggregate.addTestEvent('test-data');
+
+    expect(aggregate.domainEvents.length).toBe(1);
+    expect(aggregate.domainEvents[0]).toBeInstanceOf(TestEvent);
+    expect((aggregate.domainEvents[0] as TestEvent).data).toBe('test-data');
+  });
+
+  it('should clear events', () => {
+    const aggregate = new TestAggregate('test-id');
+
+    aggregate.addTestEvent('test-data-1');
+    aggregate.addTestEvent('test-data-2');
+    expect(aggregate.domainEvents.length).toBe(2);
+
+    aggregate.clearEvents();
+    expect(aggregate.domainEvents.length).toBe(0);
+  });
+});
+
+================
+File: src/domain/common/aggregate-root.ts
+================
+import { DomainEvent } from './domain-event';
+
+export abstract class AggregateRoot {
+  private _domainEvents: DomainEvent[] = [];
+
+  get domainEvents(): DomainEvent[] {
+    return this._domainEvents;
+  }
+
+  protected addDomainEvent(domainEvent: DomainEvent): void {
+    this._domainEvents.push(domainEvent);
+  }
+
+  public clearEvents(): void {
+    this._domainEvents = [];
+  }
+}
+
+================
+File: src/domain/common/domain-event.spec.ts
+================
+import { randomUUID } from 'node:crypto';
+import { BaseDomainEvent } from './domain-event';
+
+jest.mock('node:crypto', () => ({
+  randomUUID: jest.fn().mockReturnValue('test-uuid-123'),
+}));
+
+class TestEvent extends BaseDomainEvent {
+  constructor(public readonly data: string) {
+    super();
+  }
+}
+
+describe('BaseDomainEvent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should initialize with a UUID', () => {
+    const event = new TestEvent('test data');
+    expect(event.eventId).toBe('test-uuid-123');
+    expect(randomUUID).toHaveBeenCalledTimes(1);
+  });
+
+  it('should set occurredOn to a Date object', () => {
+    const event = new TestEvent('test data');
+    expect(event.occurredOn).toBeInstanceOf(Date);
+  });
+
+  it('should set eventName to the class name', () => {
+    const event = new TestEvent('test data');
+    expect(event.eventName).toBe('TestEvent');
+  });
+
+  it('should preserve additional properties from concrete implementations', () => {
+    const event = new TestEvent('test data');
+    expect(event.data).toBe('test data');
+  });
+
+  it('should implement the DomainEvent interface', () => {
+    const event = new TestEvent('test data');
+    expect(event).toHaveProperty('eventId');
+    expect(event).toHaveProperty('occurredOn');
+    expect(event).toHaveProperty('eventName');
+  });
+});
+
+================
+File: src/domain/common/domain-event.ts
+================
+import { randomUUID } from 'node:crypto';
+
+export interface DomainEvent {
+  readonly eventId: string;
+  readonly occurredOn: Date;
+  readonly eventName: string;
+}
+
+export abstract class BaseDomainEvent implements DomainEvent {
+  public readonly eventId: string;
+  public readonly occurredOn: Date;
+  public readonly eventName: string;
+
+  protected constructor() {
+    this.eventId = randomUUID();
+    this.occurredOn = new Date();
+    this.eventName = this.constructor.name;
+  }
+}
 
 ================
 File: src/domain/common/result.spec.ts
@@ -305,6 +462,25 @@ export abstract class ValueObject<T> {
     if (vo.props === undefined) return false;
 
     return JSON.stringify(this.props) === JSON.stringify(vo.props);
+  }
+}
+
+================
+File: src/domain/user/events/user-created.event.ts
+================
+import { BaseDomainEvent } from '../../common/domain-event';
+import { Email } from '../value-objects/email';
+import { Username } from '../value-objects/username';
+import { Name } from '../value-objects/name';
+
+export class UserCreatedEvent extends BaseDomainEvent {
+  constructor(
+    public readonly userId: string,
+    public readonly email: Email,
+    public readonly username: Username,
+    public readonly name: Name
+  ) {
+    super();
   }
 }
 
@@ -1035,114 +1211,6 @@ describe('User', () => {
 });
 
 ================
-File: src/domain/user/user.ts
-================
-import { Email } from './value-objects/email';
-import { Username } from './value-objects/username';
-import { Password } from './value-objects/password';
-import { Name } from './value-objects/name';
-import { Result } from '../common/result';
-import { randomUUID } from 'node:crypto';
-
-interface UserProps {
-  id?: string;
-  email: Email;
-  username: Username;
-  password: Password;
-  name: Name;
-  version?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-export class User {
-  private readonly _id: string;
-  private _email: Email;
-  private _username: Username;
-  private _password: Password;
-  private _name: Name;
-  private readonly _createdAt: Date;
-  private _updatedAt: Date;
-  private _version: number;
-
-  private constructor(props: UserProps) {
-    this._id = props.id || randomUUID();
-    this._email = props.email;
-    this._username = props.username;
-    this._password = props.password;
-    this._name = props.name;
-    this._createdAt = props.createdAt || new Date();
-    this._updatedAt = props.updatedAt || new Date();
-    this._version = props.version || 0;
-  }
-
-  get id(): string {
-    return this._id;
-  }
-
-  get email(): Email {
-    return this._email;
-  }
-
-  get username(): Username {
-    return this._username;
-  }
-
-  get password(): Password {
-    return this._password;
-  }
-
-  get name(): Name {
-    return this._name;
-  }
-
-  get version(): number {
-    return this._version;
-  }
-
-  get createdAt(): Date {
-    return this._createdAt;
-  }
-
-  get updatedAt(): Date {
-    return this._updatedAt;
-  }
-
-  private updated(): void {
-    this._updatedAt = new Date();
-    this._version++;
-  }
-
-  public changeEmail(email: Email): Result<void> {
-    this._email = email;
-    this.updated();
-    return Result.ok<void>();
-  }
-
-  public changeUsername(username: Username): Result<void> {
-    this._username = username;
-    this.updated();
-    return Result.ok<void>();
-  }
-
-  public changeName(name: Name): Result<void> {
-    this._name = name;
-    this.updated();
-    return Result.ok<void>();
-  }
-
-  public changePassword(password: Password): Result<void> {
-    this._password = password;
-    this.updated();
-    return Result.ok<void>();
-  }
-
-  public static create(props: UserProps): Result<User> {
-    return Result.ok<User>(new User(props));
-  }
-}
-
-================
 File: src/main.spec.ts
 ================
 import { sayHello } from './main';
@@ -1344,6 +1412,121 @@ File: tsconfig.json
     "resolveJsonModule": true,
     "baseUrl": "./",
     "outDir": "dist"
+  }
+}
+
+================
+File: src/domain/user/user.ts
+================
+import { Email } from './value-objects/email';
+import { Username } from './value-objects/username';
+import { Password } from './value-objects/password';
+import { Name } from './value-objects/name';
+import { Result } from '../common/result';
+import { randomUUID } from 'node:crypto';
+import { AggregateRoot } from '../common/aggregate-root';
+import { UserCreatedEvent } from './events/user-created.event';
+
+interface UserProps {
+  id?: string;
+  email: Email;
+  username: Username;
+  password: Password;
+  name: Name;
+  version?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export class User extends AggregateRoot {
+  private readonly _id: string;
+  private _email: Email;
+  private _username: Username;
+  private _password: Password;
+  private _name: Name;
+  private readonly _createdAt: Date;
+  private _updatedAt: Date;
+  private _version: number;
+
+  private constructor(props: UserProps) {
+    super();
+    this._id = props.id || randomUUID();
+    this._email = props.email;
+    this._username = props.username;
+    this._password = props.password;
+    this._name = props.name;
+    this._createdAt = props.createdAt || new Date();
+    this._updatedAt = props.updatedAt || new Date();
+    this._version = props.version || 0;
+  }
+
+  get id(): string {
+    return this._id;
+  }
+
+  get email(): Email {
+    return this._email;
+  }
+
+  get username(): Username {
+    return this._username;
+  }
+
+  get password(): Password {
+    return this._password;
+  }
+
+  get name(): Name {
+    return this._name;
+  }
+
+  get version(): number {
+    return this._version;
+  }
+
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
+
+  private updated(): void {
+    this._updatedAt = new Date();
+    this._version++;
+  }
+
+  public changeEmail(email: Email): Result<void> {
+    this._email = email;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changeUsername(username: Username): Result<void> {
+    this._username = username;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changeName(name: Name): Result<void> {
+    this._name = name;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public changePassword(password: Password): Result<void> {
+    this._password = password;
+    this.updated();
+    return Result.ok<void>();
+  }
+
+  public static create(props: UserProps): Result<User> {
+    const user = new User(props);
+
+    user.addDomainEvent(new UserCreatedEvent(user.id, user.email, user.username, user.name));
+
+    return Result.ok<User>(user);
   }
 }
 
